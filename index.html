@@ -25,10 +25,20 @@ let loaded = 0; const need = 3;
   img.onload=()=>{ if(++loaded===need){ reset(); requestAnimationFrame(loop);} }; img.src=s;
 });
 
-const PD = 0.95;              // seconds per fall (medium)
+const BASE_PD = 0.95;        // seconds per fall (medium)
 const SPAN = H + 1.2*SPH;
-const IDEAL_TOL = 60;        // perfect-hit window (px) — medium difficulty
-const ASSIST_TOL = 165;      // "near ideal" window used only from the help attempt on
+const IDEAL_TOL = 60;        // base perfect-hit window (px) — medium difficulty
+const ASSIST_TOL = 165;      // "near ideal" window from the help attempt on
+let curPD = BASE_PD;
+// after a few tries the game HELPS: falls slow down and the hit window widens,
+// so a persistent user is guided to a correct stop.
+function pd(){ return attempt < helpAttempt ? BASE_PD : Math.min(1.8, BASE_PD + (attempt-helpAttempt+1)*0.16); }
+function hitTol(){
+  let tol = IDEAL_TOL + Math.max(0, attempt-3)*14;        // grows every attempt
+  if(attempt >= helpAttempt)   tol = Math.max(tol, ASSIST_TOL);
+  if(attempt >= helpAttempt+2) tol = Math.max(tol, 300);  // strongly helps to stop correctly
+  return tol;
+}
 const easeIn  = p => Math.pow(p,1.4);
 const easeOut = p => 1-Math.pow(1-p,3);
 
@@ -37,9 +47,9 @@ function reset(){
   state='play'; attempt=1;
   helpAttempt = 7 + Math.floor(Math.random()*3);   // 7, 8 or 9
   passStart = performance.now()/1000 + 0.35;        // small intro
-  frozenCy=0; missUntil=0; winStart=0; snapFrom=0;
+  frozenCy=0; missUntil=0; winStart=0; snapFrom=0; curPD=BASE_PD;
 }
-function passCy(t){ const p=Math.min(1,Math.max(0,(t-passStart)/PD)); return -0.6*SPH + easeIn(p)*SPAN; }
+function passCy(t){ const p=Math.min(1,Math.max(0,(t-passStart)/curPD)); return -0.6*SPH + easeIn(p)*SPAN; }
 
 function onTap(){
   const t = performance.now()/1000;
@@ -47,8 +57,7 @@ function onTap(){
     if(t < passStart) return;
     const cy = passCy(t);
     const off = Math.abs(cy - CY);
-    const assisted = (attempt >= helpAttempt && off <= ASSIST_TOL);
-    if(off <= IDEAL_TOL || assisted){
+    if(off <= hitTol()){
       state='win'; winStart=t; snapFrom=cy;
     } else {
       state='frozenMiss'; frozenCy=cy; missUntil=t+0.75;
@@ -76,13 +85,13 @@ function loop(){
   ctx.drawImage(bg,0,0,W,H);
 
   // advance passes automatically while playing
-  if(state==='play' && t > passStart + PD){ attempt++; passStart = t; }
+  if(state==='play' && t > passStart + curPD){ attempt++; passStart = t; curPD = pd(); }
 
   // outline (pulse as steak crosses)
   let pulse=0;
   if(state==='play'){
     const pCross = Math.sqrt((CY+0.6*SPH)/SPAN);
-    const tCross = passStart + PD*pCross;
+    const tCross = passStart + curPD*pCross;
     pulse = Math.exp(-Math.pow((t-tCross)/0.14,2));
   }
   drawOutline(0.9 + 0.5*pulse, false);
@@ -100,7 +109,7 @@ function loop(){
     // marker showing the gap to the ideal line
     ctx.save(); ctx.strokeStyle='rgba(210,60,45,0.9)'; ctx.setLineDash([14,12]); ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(CX-150,CY); ctx.lineTo(CX+150,CY); ctx.stroke(); ctx.restore();
-    if(t>missUntil){ attempt++; state='play'; passStart=t+0.1; }
+    if(t>missUntil){ attempt++; state='play'; passStart=t+0.1; curPD=pd(); }
   }
   else if(state==='win'){
     const w=Math.min(1,(t-winStart)/0.22);
