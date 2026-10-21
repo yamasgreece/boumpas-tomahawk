@@ -27,8 +27,8 @@ let loaded = 0; const need = 3;
 
 const PD = 0.95;              // seconds per fall (medium)
 const SPAN = H + 1.2*SPH;
-const IDEAL_TOL = 26;        // perfect-hit window (px)
-const ASSIST_TOL = 140;      // "near ideal" window used only from the help attempt on
+const IDEAL_TOL = 60;        // perfect-hit window (px) — medium difficulty
+const ASSIST_TOL = 165;      // "near ideal" window used only from the help attempt on
 const easeIn  = p => Math.pow(p,1.4);
 const easeOut = p => 1-Math.pow(1-p,3);
 
